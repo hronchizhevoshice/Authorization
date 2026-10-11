@@ -1,172 +1,208 @@
 package com.example.authorization
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
+import com.example.authorization.data.repository.SessionRepositoryImpl
+import com.example.authorization.data.repository.UserRepositoryImpl
+import com.example.authorization.domain.model.FullUser
+import com.example.authorization.domain.model.User
+import com.example.authorization.domain.usecase.GetProfileUseCase
+import com.example.authorization.domain.usecase.SessionUseCase
+import com.example.authorization.domain.usecase.UpdateProfileUseCase
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+
+data class ProfileUiState(
+    // read-only
+    val inn: String = "",
+    val kpp: String = "",
+    val companyName: String = "",
+    val form: String = "",
+    val ogrn: String = "",
+    val okpo: String = "",
+    val companyAddress: String = "",
+    // editable
+    val email: String = "",
+    val phone: String = "",
+    val newPassword: String = "",
+    val firstname: String = "",
+    val lastname: String = "",
+    val bank: String = "",
+    val bik: String = "",
+    val rs: String = "",
+    val ks: String = "",
+    // errors
+    val emailErr: String? = null,
+    val phoneErr: String? = null,
+    val passwordErr: String? = null,
+    val firstnameErr: String? = null,
+    val lastnameErr: String? = null,
+    val bankErr: String? = null,
+    val bikErr: String? = null,
+    val rsErr: String? = null,
+    val ksErr: String? = null,
+    // statuses
+    val isLoading: Boolean = true,
+    val isSaving: Boolean = false,
+    val resultMessage: String? = null
+)
 
 class ProfileViewModel : ViewModel() {
 
-    // ---- Read-only (из ЕГРЮЛ) ----
-    var inn by mutableStateOf("")
-        private set
-    var kpp by mutableStateOf("")
-        private set
-    var companyName by mutableStateOf("")
-        private set
-    var form by mutableStateOf("")
-        private set
-    var ogrn by mutableStateOf("")
-        private set
-    var okpo by mutableStateOf("")
-        private set
-    var companyAddress by mutableStateOf("")
-        private set
+    private val getProfileUseCase = GetProfileUseCase(UserRepositoryImpl)
+    private val updateProfileUseCase = UpdateProfileUseCase(UserRepositoryImpl)
+    private val sessionUseCase = SessionUseCase(SessionRepositoryImpl)
 
-    // ---- Редактируемые ----
-    var email by mutableStateOf("")
-    var phone by mutableStateOf("")
-    var newPassword by mutableStateOf("")   // пусто = не менять
-    var firstname by mutableStateOf("")
-    var lastname by mutableStateOf("")
-    var bank by mutableStateOf("")
-    var bik by mutableStateOf("")
-    var rs by mutableStateOf("")
-    var ks by mutableStateOf("")
+    private val _uiState = MutableStateFlow(ProfileUiState())
+    val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
-    // ---- Служебное ----
     private var userId: Long = -1
     private var currentPassword: String = ""
-
-    // ---- Ошибки ----
-    var emailErr by mutableStateOf<String?>(null)
-    var phoneErr by mutableStateOf<String?>(null)
-    var passwordErr by mutableStateOf<String?>(null)
-    var firstnameErr by mutableStateOf<String?>(null)
-    var lastnameErr by mutableStateOf<String?>(null)
-    var bankErr by mutableStateOf<String?>(null)
-    var bikErr by mutableStateOf<String?>(null)
-    var rsErr by mutableStateOf<String?>(null)
-    var ksErr by mutableStateOf<String?>(null)
-
-    // ---- Статусы ----
-    var isLoading by mutableStateOf(true)
-        private set
-    var isSaving by mutableStateOf(false)
-        private set
-    var resultMessage by mutableStateOf<String?>(null)
 
     init {
         load()
     }
 
     private fun load() {
-        val sessionUser = SessionManager.getUser()
-        if (sessionUser == null) {
-            isLoading = false
-            return
-        }
-        userId = sessionUser.id
+        viewModelScope.launch {
+            val sessionUser = sessionUseCase.get()
+            if (sessionUser == null) {
+                _uiState.update { it.copy(isLoading = false) }
+                return@launch
+            }
+            userId = sessionUser.id
 
-        viewModelScope.launch(Dispatchers.IO) {
-            val full = DatabaseManager.getUserById(userId)
-            withContext(Dispatchers.Main) {
-                isLoading = false
-                if (full == null) {
-                    resultMessage = "❌ Не удалось загрузить данные"
-                    return@withContext
+            val full = getProfileUseCase(userId)
+            if (full == null) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        resultMessage = "❌ Не удалось загрузить данные"
+                    )
                 }
-                email = full.email
-                phone = full.phone
-                currentPassword = full.password
-                firstname = full.firstname
-                lastname = full.lastname
-                bank = full.bank
-                bik = full.bik
-                rs = full.rs
-                ks = full.ks
+                return@launch
+            }
 
-                inn = full.inn
-                kpp = full.kpp
-                companyName = full.companyName
-                form = full.form
-                ogrn = full.ogrn
-                okpo = full.okpo
-                companyAddress = full.companyAddress
+            currentPassword = full.password
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    email = full.email,
+                    phone = full.phone,
+                    firstname = full.firstname,
+                    lastname = full.lastname,
+                    bank = full.bank,
+                    bik = full.bik,
+                    rs = full.rs,
+                    ks = full.ks,
+                    inn = full.inn,
+                    kpp = full.kpp,
+                    companyName = full.companyName,
+                    form = full.form,
+                    ogrn = full.ogrn,
+                    okpo = full.okpo,
+                    companyAddress = full.companyAddress
+                )
             }
         }
     }
 
     // ---- Обработчики ввода ----
-    fun onEmailChange(v: String) { email = v; emailErr = null; resultMessage = null }
-    fun onPhoneChange(v: String) { phone = v.filter { it.isDigit() }.take(11); phoneErr = null; resultMessage = null }
-    fun onNewPasswordChange(v: String) { newPassword = v; passwordErr = null; resultMessage = null }
-    fun onFirstnameChange(v: String) { firstname = v; firstnameErr = null; resultMessage = null }
-    fun onLastnameChange(v: String) { lastname = v; lastnameErr = null; resultMessage = null }
-    fun onBankChange(v: String) { bank = v; bankErr = null; resultMessage = null }
-    fun onBikChange(v: String) { bik = v.filter { it.isDigit() }.take(9); bikErr = null; resultMessage = null }
-    fun onRsChange(v: String) { rs = v.filter { it.isDigit() }.take(20); rsErr = null; resultMessage = null }
-    fun onKsChange(v: String) { ks = v.filter { it.isDigit() }.take(20); ksErr = null; resultMessage = null }
+    fun onEmailChange(v: String) = _uiState.update { it.copy(email = v, emailErr = null, resultMessage = null) }
+    fun onPhoneChange(v: String) = _uiState.update {
+        it.copy(phone = v.filter { c -> c.isDigit() }.take(11), phoneErr = null, resultMessage = null)
+    }
+    fun onNewPasswordChange(v: String) = _uiState.update { it.copy(newPassword = v, passwordErr = null, resultMessage = null) }
+    fun onFirstnameChange(v: String) = _uiState.update { it.copy(firstname = v, firstnameErr = null, resultMessage = null) }
+    fun onLastnameChange(v: String) = _uiState.update { it.copy(lastname = v, lastnameErr = null, resultMessage = null) }
+    fun onBankChange(v: String) = _uiState.update {
+        it.copy(bank = v.take(100), bankErr = null, resultMessage = null)
+    }
+    fun onBikChange(v: String) = _uiState.update {
+        it.copy(bik = v.filter { c -> c.isDigit() }.take(9), bikErr = null, resultMessage = null)
+    }
+    fun onRsChange(v: String) = _uiState.update {
+        it.copy(rs = v.filter { c -> c.isDigit() }.take(20), rsErr = null, resultMessage = null)
+    }
+    fun onKsChange(v: String) = _uiState.update {
+        it.copy(ks = v.filter { c -> c.isDigit() }.take(20), ksErr = null, resultMessage = null)
+    }
 
-    // ---- Сохранение ----
     fun save() {
-        resultMessage = null
-        emailErr = validateEmail(email)
-        phoneErr = validatePhone(phone)
-        passwordErr = if (newPassword.isNotBlank() && newPassword.length < 6)
+        val s = _uiState.value
+        val emailErr = validateEmail(s.email)
+        val phoneErr = validatePhone(s.phone)
+        val passwordErr = if (s.newPassword.isNotBlank() && s.newPassword.length < 6)
             "Пароль минимум 6 символов" else null
-        firstnameErr = validateName(firstname, "Имя")
-        lastnameErr = validateName(lastname, "Фамилия")
-        bankErr = validateBank(bank)
-        bikErr = validateBik(bik)
-        rsErr = validateRs(rs, "Р/с")
-        ksErr = validateRs(ks, "К/с")
+        val firstnameErr = validateRequiredName(s.firstname, "Имя")
+        val lastnameErr = validateName(s.lastname, "Фамилия")
+        val bankErr = validateBank(s.bank)
+        val bikErr = validateBik(s.bik)
+        val rsErr = validateRs(s.rs, "Р/с")
+        val ksErr = validateRs(s.ks, "К/с")
 
         val hasErrors = listOf(
             emailErr, phoneErr, passwordErr,
             firstnameErr, lastnameErr, bankErr, bikErr, rsErr, ksErr
         ).any { it != null }
-        if (hasErrors) return
 
-        val finalPassword = if (newPassword.isNotBlank()) newPassword else currentPassword
+        if (hasErrors) {
+            _uiState.update {
+                it.copy(
+                    emailErr = emailErr,
+                    phoneErr = phoneErr,
+                    passwordErr = passwordErr,
+                    firstnameErr = firstnameErr,
+                    lastnameErr = lastnameErr,
+                    bankErr = bankErr,
+                    bikErr = bikErr,
+                    rsErr = rsErr,
+                    ksErr = ksErr
+                )
+            }
+            return
+        }
 
-        isSaving = true
-        viewModelScope.launch(Dispatchers.IO) {
+        val finalPassword = if (s.newPassword.isNotBlank()) s.newPassword else currentPassword
+
+        _uiState.update { it.copy(isSaving = true, resultMessage = null) }
+        viewModelScope.launch {
             val updated = FullUser(
                 id = userId,
-                email = email,
-                phone = phone,
+                email = s.email,
+                phone = s.phone,
                 password = finalPassword,
-                companyName = companyName,
-                inn = inn,
-                kpp = kpp,
-                form = form,
-                ogrn = ogrn,
-                okpo = okpo,
-                companyAddress = companyAddress,
-                firstname = firstname,
-                lastname = lastname,
-                bank = bank,
-                bik = bik,
-                rs = rs,
-                ks = ks
+                companyName = s.companyName,
+                inn = s.inn,
+                kpp = s.kpp,
+                form = s.form,
+                ogrn = s.ogrn,
+                okpo = s.okpo,
+                companyAddress = s.companyAddress,
+                firstname = s.firstname,
+                lastname = s.lastname,
+                bank = s.bank,
+                bik = s.bik,
+                rs = s.rs,
+                ks = s.ks
             )
-            val result = DatabaseManager.updateUser(updated)
-            withContext(Dispatchers.Main) {
-                isSaving = false
-                result.onSuccess {
-                    currentPassword = finalPassword
-                    newPassword = ""
-                    SessionManager.saveUser(
-                        User(id = userId, email = email, companyName = companyName)
+            val result = updateProfileUseCase(updated)
+            result.onSuccess {
+                currentPassword = finalPassword
+                sessionUseCase.save(User(id = userId, email = s.email, companyName = s.companyName))
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        newPassword = "",
+                        resultMessage = "✅ Данные сохранены"
                     )
-                    resultMessage = "✅ Данные сохранены"
-                }.onFailure { e ->
-                    resultMessage = "❌ Ошибка: ${e.message}"
+                }
+            }.onFailure { e ->
+                _uiState.update {
+                    it.copy(isSaving = false, resultMessage = "❌ Ошибка: ${e.message}")
                 }
             }
         }
@@ -185,6 +221,14 @@ class ProfileViewModel : ViewModel() {
         if (digits.length < 10 || digits.length > 11) return "Телефон: 10–11 цифр"
         return null
     }
+
+    private fun validateRequiredName(s: String, field: String): String? {
+        if (s.isBlank()) return "Введите $field"
+        if (s.length < 2) return "$field: минимум 2 символа"
+        if (!s.all { it.isLetter() || it == '-' || it == ' ' }) return "$field: только буквы"
+        return null
+    }
+
     private fun validateName(s: String, field: String): String? {
         if (s.isBlank()) return null
         if (s.length < 2) return "$field: минимум 2 символа"

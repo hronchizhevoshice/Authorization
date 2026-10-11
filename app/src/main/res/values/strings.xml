@@ -1,3 +1,68 @@
 <resources>
     <string name="app_name">Authorization</string>
+
+    <!-- CHOICE -->
+    <string name="choice_title">Авторизация</string>
+    <string name="choice_subtitle">Выберите действие</string>
+    <string name="btn_login">Войти</string>
+    <string name="btn_register">Зарегистрироваться</string>
+
+    <!-- LOGIN -->
+    <string name="login_title">Вход</string>
+    <string name="label_inn">ИНН</string>
+    <string name="label_inn_required">ИНН*</string>
+    <string name="label_password">Пароль</string>
+    <string name="label_password_required">Пароль*</string>
+    <string name="btn_checking">Проверка...</string>
+    <string name="btn_login_upper">ВОЙТИ</string>
+    <string name="btn_back">← Назад</string>
+
+    <!-- REGISTER -->
+    <string name="register_title">Регистрация</string>
+    <string name="section_contacts">Контактные данные</string>
+    <string name="label_email_required">E-mail*</string>
+    <string name="label_phone_required">Телефон*</string>
+    <string name="label_firstname_required">Имя*</string>
+    <string name="label_firstname">Имя</string>
+    <string name="label_lastname">Фамилия</string>
+    <string name="label_password_repeat_required">Повторите пароль*</string>
+    <string name="section_company">Данные компании</string>
+    <string name="label_company_name_auto">Название фирмы (авто)</string>
+    <string name="label_form_auto">Форма (авто)</string>
+    <string name="label_kpp_auto">КПП (авто)</string>
+    <string name="label_ogrn_auto">ОГРН (авто)</string>
+    <string name="label_okpo_auto">ОКПО (авто)</string>
+    <string name="label_address_auto">Юридический адрес (авто)</string>
+    <string name="section_bank">Банковские реквизиты</string>
+    <string name="label_bank">Банк</string>
+    <string name="label_bik">БИК</string>
+    <string name="label_rs">Р/с</string>
+    <string name="label_ks">К/с</string>
+    <string name="btn_writing">Запись...</string>
+    <string name="btn_register_upper">РЕГИСТРАЦИЯ</string>
+
+    <!-- HOME -->
+    <string name="home_title">Главный экран</string>
+    <string name="label_logged_in_as">Вы вошли как:</string>
+    <string name="btn_data">Данные</string>
+    <string name="btn_vehicles">Техника</string>
+    <string name="btn_orders">Заказы</string>
+    <string name="btn_logout">Выйти</string>
+
+    <!-- PROFILE -->
+    <string name="profile_title">Данные профиля</string>
+    <string name="loading">Загрузка данных...</string>
+    <string name="label_new_password">Новый пароль (пусто = не менять)</string>
+    <string name="section_company_view">Данные компании (только просмотр)</string>
+    <string name="label_company_name">Название фирмы</string>
+    <string name="label_form">Форма</string>
+    <string name="label_kpp">КПП</string>
+    <string name="label_ogrn">ОГРН</string>
+    <string name="label_okpo">ОКПО</string>
+    <string name="label_address">Юридический адрес</string>
+    <string name="btn_saving">Сохранение...</string>
+    <string name="btn_save_upper">СОХРАНИТЬ</string>
+
+    <!-- PLACEHOLDER -->
+    <string name="placeholder_under_construction">Раздел в разработке</string>
 </resources>

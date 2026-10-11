@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,92 +20,147 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.ui.NavDisplay
+import com.example.authorization.data.local.SessionDataStore
+import com.example.authorization.data.repository.SessionRepositoryImpl
+import com.example.authorization.domain.usecase.SessionUseCase
+import com.example.authorization.presentation.ChoiceKey
+import com.example.authorization.presentation.HomeKey
+import com.example.authorization.presentation.LoginKey
+import com.example.authorization.presentation.OrdersKey
+import com.example.authorization.presentation.ProfileKey
+import com.example.authorization.presentation.RegisterKey
+import com.example.authorization.presentation.VehiclesKey
 import com.example.authorization.ui.theme.AuthorizationTheme
-
-enum class Screen { CHOICE, LOGIN, REGISTER, HOME, PROFILE, VEHICLES, ORDERS }
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        SessionManager.init(this)
-        val startScreen = if (SessionManager.getUser() != null) Screen.HOME else Screen.CHOICE
+        SessionDataStore.init(this)
 
         setContent {
             AuthorizationTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    var screen by remember { mutableStateOf(startScreen) }
-                    var loginKey by remember { mutableStateOf(0) }
-                    var registerKey by remember { mutableStateOf(0) }
-                    var profileKey by remember { mutableStateOf(0) }
-
-                    val baseModifier = Modifier
-                        .padding(innerPadding)
-                        .padding(16.dp)
-
-                    when (screen) {
-                        Screen.CHOICE -> ChoiceScreen(
-                            modifier = baseModifier,
-                            onLogin = {
-                                loginKey++
-                                screen = Screen.LOGIN
-                            },
-                            onRegister = {
-                                registerKey++
-                                screen = Screen.REGISTER
-                            }
-                        )
-                        Screen.LOGIN -> LoginScreen(
-                            modifier = baseModifier,
-                            vmKey = loginKey,
-                            onBack = { screen = Screen.CHOICE },
-                            onLoginSuccess = { screen = Screen.HOME }
-                        )
-                        Screen.REGISTER -> RegisterScreen(
-                            modifier = baseModifier,
-                            vmKey = registerKey,
-                            onBack = { screen = Screen.CHOICE },
-                            onRegisterSuccess = { screen = Screen.HOME }
-                        )
-                        Screen.HOME -> HomeScreen(
-                            modifier = baseModifier,
-                            onProfile = {
-                                profileKey++
-                                screen = Screen.PROFILE
-                            },
-                            onVehicles = { screen = Screen.VEHICLES },
-                            onOrders = { screen = Screen.ORDERS },
-                            onLogout = { screen = Screen.CHOICE }
-                        )
-                        Screen.PROFILE -> ProfileScreen(
-                            modifier = baseModifier,
-                            vmKey = profileKey,
-                            onBack = { screen = Screen.HOME }
-                        )
-                        Screen.VEHICLES -> PlaceholderScreen(
-                            modifier = baseModifier,
-                            title = "Техника",
-                            onBack = { screen = Screen.HOME }
-                        )
-                        Screen.ORDERS -> PlaceholderScreen(
-                            modifier = baseModifier,
-                            title = "Заказы",
-                            onBack = { screen = Screen.HOME }
-                        )
-                    }
+                    AppRoot(
+                        modifier = Modifier
+                            .padding(innerPadding)
+                            .padding(16.dp)
+                    )
                 }
             }
         }
     }
+}
+
+@Composable
+fun AppRoot(modifier: Modifier = Modifier) {
+    val sessionUseCase = remember { SessionUseCase(SessionRepositoryImpl) }
+    var startKey by remember { mutableStateOf<NavKey?>(null) }
+
+    LaunchedEffect(Unit) {
+        startKey = if (sessionUseCase.get() != null) HomeKey else ChoiceKey
+    }
+
+    val key = startKey
+    if (key == null) {
+        Box(modifier = modifier.fillMaxSize())
+    } else {
+        AppNav(startKey = key, modifier = modifier)
+    }
+}
+
+@Composable
+fun AppNav(
+    startKey: NavKey,
+    modifier: Modifier = Modifier
+) {
+    val backStack = rememberNavBackStack(startKey)
+
+    NavDisplay(
+        backStack = backStack,
+        onBack = { backStack.removeLastOrNull() },
+        modifier = modifier,
+        entryProvider = entryProvider<NavKey> {
+            entry<ChoiceKey> {
+                ChoiceScreen(
+                    modifier = Modifier,
+                    onLogin = { backStack.add(LoginKey) },
+                    onRegister = { backStack.add(RegisterKey) }
+                )
+            }
+            entry<LoginKey> {
+                LoginScreen(
+                    modifier = Modifier,
+                    onBack = { backStack.removeLastOrNull() },
+                    onLoginSuccess = {
+                        backStack.clear()
+                        backStack.add(HomeKey)
+                    }
+                )
+            }
+            entry<RegisterKey> {
+                RegisterScreen(
+                    modifier = Modifier,
+                    onBack = { backStack.removeLastOrNull() },
+                    onRegisterSuccess = {
+                        backStack.clear()
+                        backStack.add(HomeKey)
+                    }
+                )
+            }
+            entry<HomeKey> {
+                HomeScreen(
+                    modifier = Modifier,
+                    onProfile = { backStack.add(ProfileKey) },
+                    onVehicles = { backStack.add(VehiclesKey) },
+                    onOrders = { backStack.add(OrdersKey) },
+                    onLogout = {
+                        backStack.clear()
+                        backStack.add(ChoiceKey)
+                    }
+                )
+            }
+            entry<ProfileKey> {
+                ProfileScreen(
+                    modifier = Modifier,
+                    onBack = { backStack.removeLastOrNull() }
+                )
+            }
+            entry<VehiclesKey> {
+                PlaceholderScreen(
+                    modifier = Modifier,
+                    title = stringResource(R.string.btn_vehicles),
+                    onBack = { backStack.removeLastOrNull() }
+                )
+            }
+            entry<OrdersKey> {
+                PlaceholderScreen(
+                    modifier = Modifier,
+                    title = stringResource(R.string.btn_orders),
+                    onBack = { backStack.removeLastOrNull() }
+                )
+            }
+        }
+    )
 }
 
 // ---------- CHOICE ----------
@@ -118,18 +174,18 @@ fun ChoiceScreen(
         modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Авторизация", style = MaterialTheme.typography.headlineMedium)
-        Text("Выберите действие", style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.choice_title), style = MaterialTheme.typography.headlineMedium)
+        Text(stringResource(R.string.choice_subtitle), style = MaterialTheme.typography.bodyMedium)
 
         Button(
             onClick = onLogin,
             modifier = Modifier.fillMaxWidth().padding(top = 24.dp)
-        ) { Text("Войти") }
+        ) { Text(stringResource(R.string.btn_login)) }
 
         Button(
             onClick = onRegister,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-        ) { Text("Зарегистрироваться") }
+        ) { Text(stringResource(R.string.btn_register)) }
     }
 }
 
@@ -137,33 +193,34 @@ fun ChoiceScreen(
 @Composable
 fun LoginScreen(
     modifier: Modifier = Modifier,
-    vmKey: Int,
     onBack: () -> Unit,
     onLoginSuccess: () -> Unit,
-    vm: LoginViewModel = viewModel(key = "login_$vmKey")
+    vm: LoginViewModel = viewModel()
 ) {
+    val state by vm.uiState.collectAsStateWithLifecycle()
+
     Column(
-        modifier = modifier.verticalScroll(rememberScrollState()),
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text("Вход", style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(R.string.login_title), style = MaterialTheme.typography.headlineSmall)
 
         OutlinedTextField(
-            value = vm.inn,
+            value = state.inn,
             onValueChange = vm::onInnChange,
-            label = { Text("ИНН") },
-            isError = vm.innErr != null,
-            supportingText = { vm.innErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_inn)) },
+            isError = state.innErr != null,
+            supportingText = { state.innErr?.let { Text(it) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.password,
+            value = state.password,
             onValueChange = vm::onPasswordChange,
-            label = { Text("Пароль") },
-            isError = vm.passwordErr != null,
-            supportingText = { vm.passwordErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_password)) },
+            isError = state.passwordErr != null,
+            supportingText = { state.passwordErr?.let { Text(it) } },
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             modifier = Modifier.fillMaxWidth()
@@ -171,14 +228,20 @@ fun LoginScreen(
 
         Button(
             onClick = { vm.login(onLoginSuccess) },
-            enabled = !vm.isLoading,
+            enabled = !state.isLoading,
             modifier = Modifier.fillMaxWidth()
-        ) { Text(if (vm.isLoading) "Проверка..." else "ВОЙТИ") }
+        ) {
+            Text(
+                stringResource(
+                    if (state.isLoading) R.string.btn_checking else R.string.btn_login_upper
+                )
+            )
+        }
 
-        vm.resultMessage?.let { Text(it, style = MaterialTheme.typography.bodyLarge) }
+        state.resultMessage?.let { Text(it, style = MaterialTheme.typography.bodyLarge) }
 
         TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-            Text("← Назад")
+            Text(stringResource(R.string.btn_back))
         }
     }
 }
@@ -187,191 +250,198 @@ fun LoginScreen(
 @Composable
 fun RegisterScreen(
     modifier: Modifier = Modifier,
-    vmKey: Int,
     onBack: () -> Unit,
     onRegisterSuccess: () -> Unit,
-    vm: RegisterViewModel = viewModel(key = "register_$vmKey")
+    vm: RegisterViewModel = viewModel()
 ) {
+    val state by vm.uiState.collectAsStateWithLifecycle()
+
     Column(
-        modifier = modifier.verticalScroll(rememberScrollState()),
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text("Регистрация", style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(R.string.register_title), style = MaterialTheme.typography.headlineSmall)
 
-        Text("Контактные данные", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.section_contacts), style = MaterialTheme.typography.titleMedium)
 
         OutlinedTextField(
-            value = vm.email,
+            value = state.email,
             onValueChange = vm::onEmailChange,
-            label = { Text("E-mail*") },
-            isError = vm.emailErr != null,
-            supportingText = { vm.emailErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_email_required)) },
+            isError = state.emailErr != null,
+            supportingText = { state.emailErr?.let { Text(it) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.phone,
+            value = state.phone,
             onValueChange = vm::onPhoneChange,
-            label = { Text("Телефон*") },
-            isError = vm.phoneErr != null,
-            supportingText = { vm.phoneErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_phone_required)) },
+            isError = state.phoneErr != null,
+            supportingText = { state.phoneErr?.let { Text(it) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.firstname,
+            value = state.firstname,
             onValueChange = vm::onFirstnameChange,
-            label = { Text("Имя") },
-            isError = vm.firstnameErr != null,
-            supportingText = { vm.firstnameErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_firstname_required)) },
+            isError = state.firstnameErr != null,
+            supportingText = { state.firstnameErr?.let { Text(it) } },
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.lastname,
+            value = state.lastname,
             onValueChange = vm::onLastnameChange,
-            label = { Text("Фамилия") },
-            isError = vm.lastnameErr != null,
-            supportingText = { vm.lastnameErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_lastname)) },
+            isError = state.lastnameErr != null,
+            supportingText = { state.lastnameErr?.let { Text(it) } },
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.password,
+            value = state.password,
             onValueChange = vm::onPasswordChange,
-            label = { Text("Пароль*") },
-            isError = vm.passwordErr != null,
-            supportingText = { vm.passwordErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_password_required)) },
+            isError = state.passwordErr != null,
+            supportingText = { state.passwordErr?.let { Text(it) } },
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.passwordRepeat,
+            value = state.passwordRepeat,
             onValueChange = vm::onPasswordRepeatChange,
-            label = { Text("Повторите пароль*") },
-            isError = vm.passwordRepeatErr != null,
-            supportingText = { vm.passwordRepeatErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_password_repeat_required)) },
+            isError = state.passwordRepeatErr != null,
+            supportingText = { state.passwordRepeatErr?.let { Text(it) } },
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             modifier = Modifier.fillMaxWidth()
         )
 
-        Text("Данные компании", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.section_company), style = MaterialTheme.typography.titleMedium)
 
         OutlinedTextField(
-            value = vm.inn,
+            value = state.inn,
             onValueChange = vm::onInnChange,
-            label = { Text("ИНН*") },
-            isError = vm.innErr != null,
-            supportingText = { vm.innErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_inn_required)) },
+            isError = state.innErr != null,
+            supportingText = { state.innErr?.let { Text(it) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.companyName,
+            value = state.companyName,
             onValueChange = { },
-            label = { Text("Название фирмы (авто)") },
+            label = { Text(stringResource(R.string.label_company_name_auto)) },
             enabled = false,
-            supportingText = { vm.innStatusMessage?.let { Text(it) } },
+            supportingText = { state.innStatusMessage?.let { Text(it) } },
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.form,
+            value = state.form,
             onValueChange = { },
-            label = { Text("Форма (авто)") },
-            enabled = false,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        OutlinedTextField(
-            value = vm.kpp,
-            onValueChange = { },
-            label = { Text("КПП (авто)") },
+            label = { Text(stringResource(R.string.label_form_auto)) },
             enabled = false,
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.ogrn,
+            value = state.kpp,
             onValueChange = { },
-            label = { Text("ОГРН (авто)") },
+            label = { Text(stringResource(R.string.label_kpp_auto)) },
             enabled = false,
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.okpo,
+            value = state.ogrn,
             onValueChange = { },
-            label = { Text("ОКПО (авто)") },
+            label = { Text(stringResource(R.string.label_ogrn_auto)) },
             enabled = false,
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.companyAddress,
+            value = state.okpo,
             onValueChange = { },
-            label = { Text("Юридический адрес (авто)") },
+            label = { Text(stringResource(R.string.label_okpo_auto)) },
             enabled = false,
             modifier = Modifier.fillMaxWidth()
         )
 
-        Text("Банковские реквизиты", style = MaterialTheme.typography.titleMedium)
+        OutlinedTextField(
+            value = state.companyAddress,
+            onValueChange = { },
+            label = { Text(stringResource(R.string.label_address_auto)) },
+            enabled = false,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Text(stringResource(R.string.section_bank), style = MaterialTheme.typography.titleMedium)
 
         OutlinedTextField(
-            value = vm.bank,
+            value = state.bank,
             onValueChange = vm::onBankChange,
-            label = { Text("Банк") },
-            isError = vm.bankErr != null,
-            supportingText = { vm.bankErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_bank)) },
+            isError = state.bankErr != null,
+            supportingText = { state.bankErr?.let { Text(it) } },
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.bik,
+            value = state.bik,
             onValueChange = vm::onBikChange,
-            label = { Text("БИК") },
-            isError = vm.bikErr != null,
-            supportingText = { vm.bikErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_bik)) },
+            isError = state.bikErr != null,
+            supportingText = { state.bikErr?.let { Text(it) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.rs,
+            value = state.rs,
             onValueChange = vm::onRsChange,
-            label = { Text("Р/с") },
-            isError = vm.rsErr != null,
-            supportingText = { vm.rsErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_rs)) },
+            isError = state.rsErr != null,
+            supportingText = { state.rsErr?.let { Text(it) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.ks,
+            value = state.ks,
             onValueChange = vm::onKsChange,
-            label = { Text("К/с") },
-            isError = vm.ksErr != null,
-            supportingText = { vm.ksErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_ks)) },
+            isError = state.ksErr != null,
+            supportingText = { state.ksErr?.let { Text(it) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth()
         )
 
         Button(
             onClick = { vm.register(onRegisterSuccess) },
-            enabled = !vm.isLoading,
+            enabled = !state.isLoading,
             modifier = Modifier.fillMaxWidth()
-        ) { Text(if (vm.isLoading) "Запись..." else "РЕГИСТРАЦИЯ") }
+        ) {
+            Text(
+                stringResource(
+                    if (state.isLoading) R.string.btn_writing else R.string.btn_register_upper
+                )
+            )
+        }
 
-        vm.resultMessage?.let { Text(it, style = MaterialTheme.typography.bodyLarge) }
+        state.resultMessage?.let { Text(it, style = MaterialTheme.typography.bodyLarge) }
 
         TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-            Text("← Назад")
+            Text(stringResource(R.string.btn_back))
         }
     }
 }
@@ -385,42 +455,46 @@ fun HomeScreen(
     onOrders: () -> Unit,
     onLogout: () -> Unit
 ) {
-    val user = SessionManager.getUser()
+    val sessionUseCase = remember { SessionUseCase(SessionRepositoryImpl) }
+    val scope = rememberCoroutineScope()
+    val user by sessionUseCase.observe().collectAsState(initial = null)
 
     Column(
         modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Главный экран", style = MaterialTheme.typography.headlineMedium)
+        Text(stringResource(R.string.home_title), style = MaterialTheme.typography.headlineMedium)
 
-        if (user != null) {
-            Text("Вы вошли как:", style = MaterialTheme.typography.bodyMedium)
-            Text(user.companyName, style = MaterialTheme.typography.titleLarge)
-            Text(user.email, style = MaterialTheme.typography.bodySmall)
+        user?.let { u ->
+            Text(stringResource(R.string.label_logged_in_as), style = MaterialTheme.typography.bodyMedium)
+            Text(u.companyName, style = MaterialTheme.typography.titleLarge)
+            Text(u.email, style = MaterialTheme.typography.bodySmall)
         }
 
         Button(
             onClick = onProfile,
             modifier = Modifier.fillMaxWidth().padding(top = 24.dp)
-        ) { Text("Данные") }
+        ) { Text(stringResource(R.string.btn_data)) }
 
         Button(
             onClick = onVehicles,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-        ) { Text("Техника") }
+        ) { Text(stringResource(R.string.btn_vehicles)) }
 
         Button(
             onClick = onOrders,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-        ) { Text("Заказы") }
+        ) { Text(stringResource(R.string.btn_orders)) }
 
         Button(
             onClick = {
-                SessionManager.clear()
-                onLogout()
+                scope.launch {
+                    sessionUseCase.clear()
+                    onLogout()
+                }
             },
             modifier = Modifier.fillMaxWidth().padding(top = 24.dp)
-        ) { Text("Выйти") }
+        ) { Text(stringResource(R.string.btn_logout)) }
     }
 }
 
@@ -428,186 +502,193 @@ fun HomeScreen(
 @Composable
 fun ProfileScreen(
     modifier: Modifier = Modifier,
-    vmKey: Int,
     onBack: () -> Unit,
-    vm: ProfileViewModel = viewModel(key = "profile_$vmKey")
+    vm: ProfileViewModel = viewModel()
 ) {
-    if (vm.isLoading) {
+    val state by vm.uiState.collectAsStateWithLifecycle()
+
+    if (state.isLoading) {
         Column(
             modifier = modifier.fillMaxSize(),
             verticalArrangement = Arrangement.Center
         ) {
-            Text("Загрузка данных...", style = MaterialTheme.typography.bodyLarge)
+            Text(stringResource(R.string.loading), style = MaterialTheme.typography.bodyLarge)
         }
         return
     }
 
     Column(
-        modifier = modifier.verticalScroll(rememberScrollState()),
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text("Данные профиля", style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(R.string.profile_title), style = MaterialTheme.typography.headlineSmall)
 
-        Text("Контактные данные", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.section_contacts), style = MaterialTheme.typography.titleMedium)
 
         OutlinedTextField(
-            value = vm.email,
+            value = state.email,
             onValueChange = vm::onEmailChange,
-            label = { Text("E-mail*") },
-            isError = vm.emailErr != null,
-            supportingText = { vm.emailErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_email_required)) },
+            isError = state.emailErr != null,
+            supportingText = { state.emailErr?.let { Text(it) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.phone,
+            value = state.phone,
             onValueChange = vm::onPhoneChange,
-            label = { Text("Телефон*") },
-            isError = vm.phoneErr != null,
-            supportingText = { vm.phoneErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_phone_required)) },
+            isError = state.phoneErr != null,
+            supportingText = { state.phoneErr?.let { Text(it) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.firstname,
+            value = state.firstname,
             onValueChange = vm::onFirstnameChange,
-            label = { Text("Имя") },
-            isError = vm.firstnameErr != null,
-            supportingText = { vm.firstnameErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_firstname_required)) },
+            isError = state.firstnameErr != null,
+            supportingText = { state.firstnameErr?.let { Text(it) } },
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.lastname,
+            value = state.lastname,
             onValueChange = vm::onLastnameChange,
-            label = { Text("Фамилия") },
-            isError = vm.lastnameErr != null,
-            supportingText = { vm.lastnameErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_lastname)) },
+            isError = state.lastnameErr != null,
+            supportingText = { state.lastnameErr?.let { Text(it) } },
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.newPassword,
+            value = state.newPassword,
             onValueChange = vm::onNewPasswordChange,
-            label = { Text("Новый пароль (пусто = не менять)") },
-            isError = vm.passwordErr != null,
-            supportingText = { vm.passwordErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_new_password)) },
+            isError = state.passwordErr != null,
+            supportingText = { state.passwordErr?.let { Text(it) } },
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             modifier = Modifier.fillMaxWidth()
         )
 
-        Text("Данные компании (только просмотр)", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.section_company_view), style = MaterialTheme.typography.titleMedium)
 
         OutlinedTextField(
-            value = vm.inn,
+            value = state.inn,
             onValueChange = { },
-            label = { Text("ИНН") },
+            label = { Text(stringResource(R.string.label_inn)) },
             enabled = false,
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.companyName,
+            value = state.companyName,
             onValueChange = { },
-            label = { Text("Название фирмы") },
+            label = { Text(stringResource(R.string.label_company_name)) },
             enabled = false,
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.form,
+            value = state.form,
             onValueChange = { },
-            label = { Text("Форма") },
+            label = { Text(stringResource(R.string.label_form)) },
             enabled = false,
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.kpp,
+            value = state.kpp,
             onValueChange = { },
-            label = { Text("КПП") },
+            label = { Text(stringResource(R.string.label_kpp)) },
             enabled = false,
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.ogrn,
+            value = state.ogrn,
             onValueChange = { },
-            label = { Text("ОГРН") },
+            label = { Text(stringResource(R.string.label_ogrn)) },
             enabled = false,
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.okpo,
+            value = state.okpo,
             onValueChange = { },
-            label = { Text("ОКПО") },
+            label = { Text(stringResource(R.string.label_okpo)) },
             enabled = false,
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.companyAddress,
+            value = state.companyAddress,
             onValueChange = { },
-            label = { Text("Юридический адрес") },
+            label = { Text(stringResource(R.string.label_address)) },
             enabled = false,
             modifier = Modifier.fillMaxWidth()
         )
 
-        Text("Банковские реквизиты", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.section_bank), style = MaterialTheme.typography.titleMedium)
 
         OutlinedTextField(
-            value = vm.bank,
+            value = state.bank,
             onValueChange = vm::onBankChange,
-            label = { Text("Банк") },
-            isError = vm.bankErr != null,
-            supportingText = { vm.bankErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_bank)) },
+            isError = state.bankErr != null,
+            supportingText = { state.bankErr?.let { Text(it) } },
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.bik,
+            value = state.bik,
             onValueChange = vm::onBikChange,
-            label = { Text("БИК") },
-            isError = vm.bikErr != null,
-            supportingText = { vm.bikErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_bik)) },
+            isError = state.bikErr != null,
+            supportingText = { state.bikErr?.let { Text(it) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.rs,
+            value = state.rs,
             onValueChange = vm::onRsChange,
-            label = { Text("Р/с") },
-            isError = vm.rsErr != null,
-            supportingText = { vm.rsErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_rs)) },
+            isError = state.rsErr != null,
+            supportingText = { state.rsErr?.let { Text(it) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = vm.ks,
+            value = state.ks,
             onValueChange = vm::onKsChange,
-            label = { Text("К/с") },
-            isError = vm.ksErr != null,
-            supportingText = { vm.ksErr?.let { Text(it) } },
+            label = { Text(stringResource(R.string.label_ks)) },
+            isError = state.ksErr != null,
+            supportingText = { state.ksErr?.let { Text(it) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth()
         )
 
         Button(
             onClick = { vm.save() },
-            enabled = !vm.isSaving,
+            enabled = !state.isSaving,
             modifier = Modifier.fillMaxWidth()
-        ) { Text(if (vm.isSaving) "Сохранение..." else "СОХРАНИТЬ") }
+        ) {
+            Text(
+                stringResource(
+                    if (state.isSaving) R.string.btn_saving else R.string.btn_save_upper
+                )
+            )
+        }
 
-        vm.resultMessage?.let { Text(it, style = MaterialTheme.typography.bodyLarge) }
+        state.resultMessage?.let { Text(it, style = MaterialTheme.typography.bodyLarge) }
 
         TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-            Text("← Назад")
+            Text(stringResource(R.string.btn_back))
         }
     }
 }
@@ -624,10 +705,13 @@ fun PlaceholderScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Text(title, style = MaterialTheme.typography.headlineMedium)
-        Text("Раздел в разработке", style = MaterialTheme.typography.bodyMedium)
+        Text(
+            stringResource(R.string.placeholder_under_construction),
+            style = MaterialTheme.typography.bodyMedium
+        )
 
         TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth().padding(top = 24.dp)) {
-            Text("← Назад")
+            Text(stringResource(R.string.btn_back))
         }
     }
 }

@@ -1,53 +1,11 @@
 package com.example.authorization
 
 import android.util.Log
+import com.example.authorization.domain.model.FullUser
+import com.example.authorization.domain.model.RegisterData
+import com.example.authorization.domain.model.User
 import java.sql.Connection
 import java.sql.DriverManager
-
-data class User(
-    val id: Long,
-    val email: String,
-    val companyName: String
-)
-
-data class RegisterData(
-    val email: String,
-    val phone: String,
-    val password: String,
-    val companyName: String,
-    val inn: String,
-    val kpp: String,
-    val form: String,
-    val ogrn: String,
-    val okpo: String,
-    val companyAddress: String,
-    val firstname: String,
-    val lastname: String,
-    val bank: String,
-    val bik: String,
-    val rs: String,
-    val ks: String
-)
-
-data class FullUser(
-    val id: Long,
-    val email: String,
-    val phone: String,
-    val password: String,
-    val companyName: String,
-    val inn: String,
-    val kpp: String,
-    val form: String,
-    val ogrn: String,
-    val okpo: String,
-    val companyAddress: String,
-    val firstname: String,
-    val lastname: String,
-    val bank: String,
-    val bik: String,
-    val rs: String,
-    val ks: String
-)
 
 object DatabaseManager {
 

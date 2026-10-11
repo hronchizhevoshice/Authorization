@@ -1,48 +1,66 @@
 package com.example.authorization
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
+import com.example.authorization.data.repository.SessionRepositoryImpl
+import com.example.authorization.data.repository.UserRepositoryImpl
+import com.example.authorization.domain.usecase.LoginUseCase
+import com.example.authorization.domain.usecase.SessionUseCase
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+
+data class LoginUiState(
+    val inn: String = "",
+    val password: String = "",
+    val innErr: String? = null,
+    val passwordErr: String? = null,
+    val isLoading: Boolean = false,
+    val resultMessage: String? = null
+)
 
 class LoginViewModel : ViewModel() {
 
-    var inn by mutableStateOf("")
-    var password by mutableStateOf("")
+    private val loginUseCase = LoginUseCase(UserRepositoryImpl)
+    private val sessionUseCase = SessionUseCase(SessionRepositoryImpl)
 
-    var innErr by mutableStateOf<String?>(null)
-    var passwordErr by mutableStateOf<String?>(null)
-
-    var isLoading by mutableStateOf(false)
-        private set
-    var resultMessage by mutableStateOf<String?>(null)
+    private val _uiState = MutableStateFlow(LoginUiState())
+    val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
     fun onInnChange(v: String) {
-        inn = v.filter { it.isDigit() }.take(10)
-        innErr = null
+        val digits = v.filter { it.isDigit() }.take(10)
+        _uiState.update { it.copy(inn = digits, innErr = null) }
     }
-    fun onPasswordChange(v: String) { password = v; passwordErr = null }
+
+    fun onPasswordChange(v: String) {
+        _uiState.update { it.copy(password = v, passwordErr = null) }
+    }
 
     fun login(onSuccess: () -> Unit) {
-        resultMessage = null
-        innErr = validateInn(inn)
-        passwordErr = if (password.isBlank()) "Введите пароль" else null
-        if (innErr != null || passwordErr != null) return
+        val state = _uiState.value
+        val innErr = validateInn(state.inn)
+        val passwordErr = if (state.password.isBlank()) "Введите пароль" else null
 
-        isLoading = true
-        viewModelScope.launch(Dispatchers.IO) {
-            val user = DatabaseManager.loginUser(inn, password)
-            withContext(Dispatchers.Main) {
-                isLoading = false
-                if (user != null) {
-                    SessionManager.saveUser(user)
-                    onSuccess()
-                } else {
-                    resultMessage = "❌ Неверный ИНН или пароль"
+        if (innErr != null || passwordErr != null) {
+            _uiState.update { it.copy(innErr = innErr, passwordErr = passwordErr) }
+            return
+        }
+
+        _uiState.update { it.copy(isLoading = true, resultMessage = null) }
+        viewModelScope.launch {
+            val user = loginUseCase(state.inn, state.password)
+            if (user != null) {
+                sessionUseCase.save(user)
+                _uiState.update { it.copy(isLoading = false) }
+                onSuccess()
+            } else {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        resultMessage = "❌ Неверный ИНН или пароль"
+                    )
                 }
             }
         }
