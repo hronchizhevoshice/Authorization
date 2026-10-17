@@ -137,7 +137,7 @@ object DatabaseManager {
             val sql = """
                 SELECT id, email, phone, password_hash, company_name, inn, kpp,
                        form, ogrn, okpo, company_adress,
-                       firstname, lastname, bank, bik, r_s, k_s
+                       firstname, lastname, bank, bik, r_s, k_s, vk_user_id
                 FROM public.users 
                 WHERE id = ?
                 LIMIT 1
@@ -146,6 +146,9 @@ object DatabaseManager {
             ps.setLong(1, id)
             val result = ps.executeQuery()
             val user = if (result.next()) {
+                val vkRaw = result.getLong("vk_user_id")
+                val vkId = if (result.wasNull()) null else vkRaw
+
                 FullUser(
                     id = result.getLong("id"),
                     email = result.getString("email") ?: "",
@@ -163,7 +166,8 @@ object DatabaseManager {
                     bank = result.getString("bank") ?: "",
                     bik = result.getString("bik") ?: "",
                     rs = result.getString("r_s") ?: "",
-                    ks = result.getString("k_s") ?: ""
+                    ks = result.getString("k_s") ?: "",
+                    vkUserId = vkId
                 )
             } else null
             result.close()
@@ -208,6 +212,23 @@ object DatabaseManager {
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка updateUser: ${e.javaClass.simpleName}: ${e.message}", e)
             Result.failure(e)
+        }
+    }
+
+    fun updateVkId(userId: Long, vkId: Long?): Boolean {
+        return try {
+            val conn = getConnection() ?: return false
+            val sql = "UPDATE public.users SET vk_user_id = ?, updated_at = now() WHERE id = ?"
+            val ps = conn.prepareStatement(sql)
+            if (vkId != null) ps.setLong(1, vkId) else ps.setNull(1, java.sql.Types.BIGINT)
+            ps.setLong(2, userId)
+            ps.executeUpdate()
+            ps.close()
+            conn.close()
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка updateVkId: ${e.message}", e)
+            false
         }
     }
 }

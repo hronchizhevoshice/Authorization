@@ -10,4 +10,5 @@ interface UserRepository {
     suspend fun isInnExists(inn: String): Boolean
     suspend fun getById(id: Long): FullUser?
     suspend fun update(user: FullUser): Result<Unit>
+    suspend fun updateVkId(userId: Long, vkId: Long?): Boolean
 }

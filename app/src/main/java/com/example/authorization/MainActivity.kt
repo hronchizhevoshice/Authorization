@@ -50,6 +50,7 @@ import com.example.authorization.presentation.RegisterKey
 import com.example.authorization.presentation.VehiclesKey
 import com.example.authorization.ui.theme.AuthorizationTheme
 import kotlinx.coroutines.launch
+import androidx.compose.material3.AlertDialog
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -453,11 +454,45 @@ fun HomeScreen(
     onProfile: () -> Unit,
     onVehicles: () -> Unit,
     onOrders: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    vm: HomeViewModel = viewModel()
 ) {
     val sessionUseCase = remember { SessionUseCase(SessionRepositoryImpl) }
     val scope = rememberCoroutineScope()
     val user by sessionUseCase.observe().collectAsState(initial = null)
+    val state by vm.uiState.collectAsStateWithLifecycle()
+
+    if (state.showVkDialog) {
+        AlertDialog(
+            onDismissRequest = { vm.closeVkDialog() },
+            title = { Text(stringResource(R.string.dialog_vk_title)) },
+            text = {
+                Column {
+                    Text("Введите ID профиля ВКонтакте:")
+                    OutlinedTextField(
+                        value = state.vkInput,
+                        onValueChange = vm::onVkInputChange,
+                        placeholder = { Text(stringResource(R.string.dialog_vk_hint)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    state.vkError?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 4.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { vm.saveVk() }, enabled = !state.isSavingVk) {
+                    Text(if (state.isSavingVk) "..." else stringResource(R.string.btn_attach))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { vm.closeVkDialog() }) {
+                    Text(stringResource(R.string.btn_cancel))
+                }
+            }
+        )
+    }
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -485,6 +520,18 @@ fun HomeScreen(
             onClick = onOrders,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
         ) { Text(stringResource(R.string.btn_orders)) }
+
+        // Кнопка ВК
+        val vkId = state.profile?.vkUserId
+        Button(
+            onClick = { vm.openVkDialog() },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+        ) {
+            Text(
+                if (vkId != null) "Изменить ВК (ID: $vkId)"
+                else stringResource(R.string.btn_link_vk)
+            )
+        }
 
         Button(
             onClick = {

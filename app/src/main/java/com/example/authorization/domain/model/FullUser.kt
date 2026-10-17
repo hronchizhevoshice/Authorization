@@ -17,5 +17,6 @@ data class FullUser(
     val bank: String,
     val bik: String,
     val rs: String,
-    val ks: String
+    val ks: String,
+    val vkUserId: Long? = null
 )

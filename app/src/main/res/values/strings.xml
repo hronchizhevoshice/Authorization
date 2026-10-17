@@ -65,4 +65,12 @@
 
     <!-- PLACEHOLDER -->
     <string name="placeholder_under_construction">Раздел в разработке</string>
+
+    <!-- VK -->
+    <string name="btn_link_vk">Привязать ВК</string>
+    <string name="dialog_vk_title">Привязка ВКонтакте</string>
+    <string name="dialog_vk_hint">Ссылка или ID профиля</string>
+    <string name="btn_attach">Привязать</string>
+    <string name="btn_cancel">Отмена</string>
+
 </resources>

@@ -34,4 +34,9 @@ object UserRepositoryImpl : UserRepository {
         withContext(Dispatchers.IO) {
             DatabaseManager.updateUser(user)
         }
+
+    override suspend fun updateVkId(userId: Long, vkId: Long?): Boolean =
+        withContext(Dispatchers.IO) {
+            DatabaseManager.updateVkId(userId, vkId)
+        }
 }
